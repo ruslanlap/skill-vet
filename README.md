@@ -72,6 +72,20 @@ repos:
       - id: skill-vet
 ```
 
+## Use as an agent skill (Claude Code / Codex / Hermes)
+
+One SKILL.md, same format everywhere — teaches the agent to scan skills **itself** before
+running them:
+
+| Platform | Install |
+|---|---|
+| Claude Code | `git clone https://github.com/ruslanlap/skill-vet ~/.claude/skills/skill-vet-repo --depth 1` |
+| Codex CLI | `git clone https://github.com/ruslanlap/skill-vet ~/.codex/skills/skill-vet-repo --depth 1` |
+| Hermes | `hermes skills install https://raw.githubusercontent.com/ruslanlap/skill-vet/main/skills/skill-vet/SKILL.md --name skill-vet` |
+
+(For Claude/Codex the skill lives at `skills/skill-vet/SKILL.md` inside the clone — both
+CLIs pick up nested SKILL.md files; alternatively copy that folder as `~/.claude/skills/skill-vet/`.)
+
 ## Usage
 
 ```bash

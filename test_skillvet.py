@@ -250,6 +250,9 @@ class TestRepoExamples(unittest.TestCase):
         findings = skillvet.scan(HERE / "examples" / "malicious-skill")
         self.assertGreaterEqual(len({f["rule"] for f in findings}), 5)
 
+    def test_shipped_agent_skill_is_clean(self):
+        self.assertEqual(skillvet.scan(HERE / "skills" / "skill-vet"), [])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
