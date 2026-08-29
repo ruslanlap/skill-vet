@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest discover -s . -p "test_*.py" -v 2>/dev/null || python3 test_skillvet.py
+      - name: Self-scan (allowed to surface own signatures)
+        run: python3 skillvet.py ./examples/clean-skill/ && python3 skillvet.py ./examples/malicious-skill/ --fail-on critical
+
+  sarif:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 skillvet.py ./examples/clean-skill/ --sarif skillvet.sarif
+      - uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: skillvet.sarif

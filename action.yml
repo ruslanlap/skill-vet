@@ -1,0 +1,27 @@
+name: Run skill-vet
+
+description: >
+  Scan an AI agent skill directory with skill-vet and optionally fail on findings.
+
+inputs:
+  path:
+    description: Path to the skill directory to scan
+    required: false
+    default: ./
+  fail-on:
+    description: Minimum severity that fails the step (info|warn|medium|high|critical)
+    required: false
+    default: high
+  sarif:
+    description: Write a SARIF report to this file (optional)
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        ARGS="${{ inputs.path }} --fail-on ${{ inputs.fail-on }}"
+        if [ -n "${{ inputs.sarif }}" ]; then ARGS="$ARGS --sarif ${{ inputs.sarif }}"; fi
+        python3 "$GITHUB_ACTION_PATH/skillvet.py" $ARGS

