@@ -173,8 +173,8 @@ def main():
     ap.add_argument("path", nargs="*", default=["."], help="skill directories or files (default: .)")
     ap.add_argument("--sarif", metavar="FILE", help="write SARIF 2.1.0 report")
     ap.add_argument("--json", action="store_true", help="JSON output")
-    ap.add_argument("--format", choices=["text", "github"], default="text",
-                    help="github = ::error workflow annotations (auto with CI env)")
+    ap.add_argument("--format", choices=["text", "github"], default=None,
+                    help="github = ::error workflow annotations (default: auto with CI env)")
     ap.add_argument("--fail-on", choices=list(SEV_ORDER), default="high",
                     help="minimum severity to fail CI (default: high)")
     args = ap.parse_args()
@@ -189,11 +189,12 @@ def main():
     for t in targets:
         findings.extend(scan(t))
 
+    fmt = args.format or ("github" if os.getenv("GITHUB_ACTIONS") == "true" else "text")
     if args.sarif:
         Path(args.sarif).write_text(json.dumps(to_sarif(findings, targets[0]), indent=2))
     if args.json:
         print(json.dumps({"findings": findings}, indent=2))
-    elif args.format == "github" or os.getenv("GITHUB_ACTIONS") == "true":
+    elif fmt == "github":
         # GitHub Actions workflow annotations — show inline on the PR
         for f in findings:
             print(f"::error file={f['file']},line={f['line']},title={f['rule']}::{f['message']}")
