@@ -187,10 +187,12 @@ class TestCLI(unittest.TestCase):
             self.assertEqual(run_cli([str(d / "good"), str(d / "bad")]).returncode, 1)
             # single file mode: clean file passes
             self.assertEqual(run_cli([str(d / "notes.md")]).returncode, 0)
-            # single file mode: flagged file fails, filename shown
-            r = run_cli([str(d / "bad" / "SKILL.md")])
-            self.assertEqual(r.returncode, 1)
-            self.assertIn("SKILL.md:1", r.stdout)
+            # single file mode: flagged file fails; explicit format wins over env auto-detect
+            r_text = run_cli([str(d / "bad" / "SKILL.md"), "--format", "text"])
+            self.assertEqual(r_text.returncode, 1)
+            self.assertIn("SKILL.md:1", r_text.stdout)
+            r_gh = run_cli([str(d / "bad" / "SKILL.md"), "--format", "github"])
+            self.assertIn("::error file=", r_gh.stdout)
         finally:
             shutil.rmtree(d, ignore_errors=True)
 
