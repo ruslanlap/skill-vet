@@ -18,7 +18,7 @@ RULES = [
      r"^\s*(env|printenv)\s*\|",
      "Pipes a full environment dump into another command — credential exfiltration pattern."),
     ("EXFIL-ENV", "critical",
-     r"(curl|wget|fetch|Invoke-WebRequest|httpie)[^\n|;]*\$(\{)?(env|ENV)[\s\S]{0,80}\|\s*(curl|wget|sh|bash)",
+     r"(curl|wget|fetch|Invoke-WebRequest|httpie)[^\n|;]*\$\{?\(?(env|ENV)\)?[\s\S]{0,80}\|\s*(curl|wget|sh|bash)",
      "Pipes environment variables to a network command — credential exfiltration pattern."),
     ("EXFIL-ENV-CURL", "critical",
      r"https?://[^\s\"']*[\?&=][^\s\"']*\$\(?(env|printenv|ENV)\b",
@@ -27,8 +27,8 @@ RULES = [
      r"(curl|wget)[^\n]*(-d|--data|-F|--form|--upload-file)[^\n]*(\$\{?[A-Z_]*(KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL))",
      "Sends a key/token/secret variable in an HTTP request body."),
     ("CRED-HARVEST", "high",
-     r"\b(cat|type|Get-Content)\s+[^|\n]*(\.ssh/id_|\.aws/credentials|\.netrc|credentials\.json|\.npmrc|\.pypirc)",
-     "Reads well-known credential files (.ssh, .aws, .netrc, .npmrc...)."),
+     r"\b(cat|type|Get-Content)\s+[^|\n]*(\.ssh/id_|\.aws/credentials|\.netrc|credentials\.json|\.npmrc|\.pypirc|\.git-credentials|\.env\b)",
+     "Reads well-known credential files (.ssh, .aws, .netrc, .npmrc, .env...)."),
     ("DESTRUCTIVE", "high",
      r"\brm\s+-rf?\s+(/|~|\$HOME|\.)(\s|$|/)`?",
      "rm -rf on /, ~, $HOME or cwd — destructive filesystem wipe."),
@@ -59,6 +59,15 @@ RULES = [
     ("KEYCHAIN-ACCESS", "high",
      r"(security\s+find-generic-password|secret-tool\s+lookup|cmdkey\s+/list)",
      "Reads OS keychain / credential manager."),
+    ("CLIPBOARD-EXFIL", "high",
+     r"(pbpaste|xclip\s+-o|xsel\s+-o|wl-paste|Get-Clipboard)[^\n|;]*\|\s*(curl|wget|nc|ncat)",
+     "Pipes clipboard contents to a network command — clipboard exfiltration."),
+    ("PERSIST-HOOK", "high",
+     r"(crontab|/etc/cron\.|LaunchAgents|\.(?:bashrc|zshrc|bash_profile|profile))[^|\n]*(?:>>|>[^>]|tee\s)|(?:>>|>[^>]|tee\s)[^|\n]*\.(?:bashrc|zshrc|bash_profile|zprofile)",
+     "Appends to shell startup files / cron — persistence mechanism."),
+    ("OSA-AUTOMATION", "warn",
+     r"\bosascript\s+-e",
+     "macOS osascript automation — can drive GUI, dialogs and network without prompts."),
 ]
 
 DEFAULT_ALLOWLIST = [
@@ -152,6 +161,8 @@ def main():
     ap.add_argument("path", nargs="?", default=".", help="skill directory (default: .)")
     ap.add_argument("--sarif", metavar="FILE", help="write SARIF 2.1.0 report")
     ap.add_argument("--json", action="store_true", help="JSON output")
+    ap.add_argument("--format", choices=["text", "github"], default="text",
+                    help="github = ::error workflow annotations (auto with CI env)")
     ap.add_argument("--fail-on", choices=list(SEV_ORDER), default="high",
                     help="minimum severity to fail CI (default: high)")
     args = ap.parse_args()
@@ -165,6 +176,11 @@ def main():
         Path(args.sarif).write_text(json.dumps(to_sarif(findings, root), indent=2))
     if args.json:
         print(json.dumps({"path": str(root), "findings": findings}, indent=2))
+    elif args.format == "github" or os.getenv("GITHUB_ACTIONS") == "true":
+        # GitHub Actions workflow annotations — show inline on the PR
+        for f in findings:
+            print(f"::error file={f['file']},line={f['line']},title={f['rule']}::{f['message']}")
+        print(f"::notice::skill-vet: {len(findings)} finding(s) in {root.name}/")
     else:
         if not findings:
             print(f"✅ skill-vet: no issues found in {root.name}/")

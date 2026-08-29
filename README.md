@@ -1,5 +1,7 @@
 # skill-vet 🩺
 
+[![CI](https://github.com/ruslanlap/skill-vet/actions/workflows/ci.yml/badge.svg)](https://github.com/ruslanlap/skill-vet/actions/workflows/ci.yml)
+
 **Vet AI agent skills before your agent runs them.**
 
 Your coding agent reads and executes whatever `SKILL.md` tells it: shell scripts, install
@@ -71,16 +73,19 @@ Exit codes: `0` = clean (or findings below threshold), `1` = findings at/above `
 | `EXFIL-ENV-CURL` | critical | URL embedding an `env`/`printenv` dump |
 | `NETPIPE-SECRET` | critical | key/token/secret in an HTTP request body |
 | `REVERSE-SHELL` | critical | bash `/dev/tcp`, `nc -e` |
-| `CRED-HARVEST` | high | reads `.ssh`, `.aws/credentials`, `.netrc`, `.npmrc` |
+| `CRED-HARVEST` | high | reads `.ssh`, `.aws/credentials`, `.netrc`, `.npmrc`, `.env` |
 | `DESTRUCTIVE` | high | `rm -rf /`, `rm -rf ~`, `rm -rf $HOME` |
 | `EVAL-OBFUSCATION` | high | base64-decoded payload piped to shell |
 | `INJECT-IGNORE-PREVIOUS` | high | "ignore all previous instructions" |
 | `INJECT-EXFIL-REQUEST` | high | "send the api key to https://..." |
 | `KEYCHAIN-ACCESS` | high | macOS keychain / secret-tool / cmdkey |
+| `CLIPBOARD-EXFIL` | high | pipes clipboard (`pbpaste`, `xclip -o`…) to the network |
+| `PERSIST-HOOK` | high | appends to shell startup files / cron |
 | `INJECT-HIDDEN` | medium | instructions hidden in HTML comments |
 | `UNICODE-STEGO` | medium | BiDi control characters |
 | `INSTALL-PIPE-SHELL` | warn | `curl ... \| sh` |
 | `TELEMETRY-PHONES-HOME` | warn | self-reported telemetry |
+| `OSA-AUTOMATION` | warn | macOS `osascript -e` automation |
 
 Static analysis has known limits — this is a tripwire, not a sandbox. Deliberate
 simplification: line-level regex matching; full AST/dataflow analysis is the upgrade path.
@@ -128,7 +133,8 @@ signature-based scanner. Scan skills, not the scanner.
 
 ## Roadmap
 
-- [ ] `--format github` annotations
+- [x] `--format github` annotations
+- [x] test suite covering every rule (20 tests, stdlib `unittest`)
 - [ ] pre-commit hook
 - [ ] pipx installable entry point
 - [ ] MCP tool-bundle aware parsing
