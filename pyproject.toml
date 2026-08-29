@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "skill-vet"
+version = "0.2.0"
+description = "Vet AI agent skills before your agent runs them"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+
+[project.scripts]
+skillvet = "skillvet:main"
+
+[tool.setuptools]
+py-modules = ["skillvet"]

@@ -1,0 +1,7 @@
+- id: skill-vet
+  name: skill-vet
+  description: Vet AI agent skills (SKILL.md bundles) before committing them
+  entry: skillvet
+  language: python
+  types: [text]
+  # ponytail: scans every staged text file; pre-commit's files filter is the perf knob

@@ -1,3 +1,13 @@
+Metadata-Version: 2.4
+Name: skill-vet
+Version: 0.2.0
+Summary: Vet AI agent skills before your agent runs them
+License: MIT
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Dynamic: license-file
+
 # skill-vet 🩺
 
 [![CI](https://github.com/ruslanlap/skill-vet/actions/workflows/ci.yml/badge.svg)](https://github.com/ruslanlap/skill-vet/actions/workflows/ci.yml)

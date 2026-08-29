@@ -1,0 +1,9 @@
+LICENSE
+README.md
+pyproject.toml
+skillvet.py
+skill_vet.egg-info/PKG-INFO
+skill_vet.egg-info/SOURCES.txt
+skill_vet.egg-info/dependency_links.txt
+skill_vet.egg-info/entry_points.txt
+skill_vet.egg-info/top_level.txt
