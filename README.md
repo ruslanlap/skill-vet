@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/ruslanlap/skill-vet/actions/workflows/ci.yml/badge.svg)](https://github.com/ruslanlap/skill-vet/actions/workflows/ci.yml)
 
+English | [Українська](docs/README.uk.md) | [简体中文](docs/README.zh-CN.md)
+
 **Vet AI agent skills before your agent runs them.**
 
 Your coding agent reads and executes whatever `SKILL.md` tells it: shell scripts, install
