@@ -1,6 +1,10 @@
 # skill-vet 🩺
 
 [![CI](https://github.com/ruslanlap/skill-vet/actions/workflows/ci.yml/badge.svg)](https://github.com/ruslanlap/skill-vet/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![GitHub release](https://img.shields.io/github/v/release/ruslanlap/skill-vet)](https://github.com/ruslanlap/skill-vet/releases)
+[![stars](https://img.shields.io/github/stars/ruslanlap/skill-vet?style=flat&color=yellow)](https://github.com/ruslanlap/skill-vet/stargazers)
+[![code scanning](https://img.shields.io/github/actions/workflow/status/ruslanlap/skill-vet/ci.yml?label=code%20scanning&branch=main)](https://github.com/ruslanlap/skill-vet/security/code-scanning)
 
 English | [Українська](docs/README.uk.md) | [简体中文](docs/README.zh-CN.md)
 
