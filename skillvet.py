@@ -35,6 +35,13 @@ RULES = [
     ("EVAL-OBFUSCATION", "high",
      r"\b(eval|exec)\s*\(\s*base64|base64\s+-d\s*<?\s*\|\s*(sh|bash|zsh|python)",
      "Base64-decoded payload piped into a shell/interpreter — obfuscated execution."),
+    ("DECODE-EXEC", "high",
+     # sink-first (os.system(base64.b64decode(x))) AND decode-first (x = b64decode(...); exec(x))
+     r"(?:os\.system|subprocess\.(?:run|call|Popen|check_output)|exec\s*\(|Function\s*\()\s*\(?\s*[\w.]*\s*\(?\s*"
+     r"(?:b64decode|decodebytes|fromhex|codecs\.decode|zlib\.decompress|gzip\.decompress)"
+     r"|(?:b64decode|decodebytes|fromhex|codecs\.decode|zlib\.decompress|gzip\.decompress)[^\n]{0,60}?"
+     r"(?:os\.system|subprocess\.(?:run|call|Popen|check_output)|exec\s*\(|Function\s*\()",
+     "Runtime-decoded payload handed straight to an execution sink (no eval/exec literal needed)."),
     ("REVERSE-SHELL", "critical",
      r"(bash|sh|nc|ncat|netcat)\s+-i?\s*>&\s*/dev/tcp/|mkfifo[^\n]*nc\s+-e|/dev/tcp/[^\s]+/\d+\s*0?>&?1",
      "Reverse shell pattern (bash /dev/tcp, nc -e)."),
