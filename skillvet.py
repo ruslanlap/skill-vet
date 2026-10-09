@@ -10,7 +10,7 @@ Exit codes: 0 = pass, 1 = findings at or above --fail-on severity.
 import argparse, json, os, re, sys
 from pathlib import Path
 
-SEV_ORDER = {"info": 0, "warn": 1, "high": 2, "critical": 3}
+SEV_ORDER = {"info": 0, "warn": 1, "medium": 2, "high": 3, "critical": 4}
 
 # (id, severity, pattern, message)
 RULES = [
