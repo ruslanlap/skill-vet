@@ -211,6 +211,23 @@ class TestCLI(unittest.TestCase):
         finally:
             shutil.rmtree(d, ignore_errors=True)
 
+    def test_medium_findings_follow_fail_on(self):
+        for rule in ("INJECT-HIDDEN", "UNICODE-STEGO"):
+            d = make_skill({"SKILL.md": TRIGGERS[rule] + "\n"})
+            try:
+                for severity, expected in ((None, 0), ("info", 1), ("warn", 1),
+                                           ("medium", 1), ("high", 0), ("critical", 0)):
+                    with self.subTest(rule=rule, severity=severity):
+                        args = [str(d), "--json"]
+                        if severity is not None:
+                            args += ["--fail-on", severity]
+                        out = run_cli(args)
+                        self.assertEqual(out.stderr, "")
+                        self.assertEqual(out.returncode, expected)
+                        self.assertEqual(json.loads(out.stdout)["findings"][0]["rule"], rule)
+            finally:
+                shutil.rmtree(d, ignore_errors=True)
+
     def test_github_format_annotations(self):
         d = make_skill({"SKILL.md": "rm -rf /\n"})
         try:
