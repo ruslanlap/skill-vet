@@ -62,7 +62,7 @@ Or drop `skillvet.py` into your repo — it is a single file on purpose.
 Via pip/uv/pipx:
 
 ```bash
-pipx install git+https://github.com/ruslanlap/skill-vet
+pipx install skillvet
 skillvet ./path/to/skill/
 ```
 
@@ -206,9 +206,12 @@ Successful push CI on `main` automatically publishes the next patch version
 (`v0.2.0` → `v0.2.1`). PRs and failed CI cannot publish. The workflow tests and
 builds the release, then atomically pushes a version-only commit and matching tag
 before creating a GitHub Release with generated notes, `skillvet.py`, a wheel and
-a source distribution. It does not publish to PyPI.
+a source distribution. The same wheel and source distribution are then published
+to [PyPI as `skillvet`](https://pypi.org/project/skillvet/). The PyPI name
+`skill-vet` belongs to a different project; use `pip install skillvet` or `pipx install skillvet`.
 
-Only `GITHUB_TOKEN` with `contents: write` is needed; no PAT or release secret.
+GitHub publishing uses `GITHUB_TOKEN` with `contents: write`; PyPI publishing uses
+the repository Actions secret `PYPI_API_TOKEN`. No GitHub PAT is needed.
 Repository rules must allow GitHub Actions to push version commits to `main`
 and create version tags. A newer `main` supersedes stale CI runs. Release commits
 do not start another release. To retry a failed publish, rerun its **Automatic
