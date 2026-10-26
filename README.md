@@ -34,9 +34,9 @@ Existing SKILL.md scanners are single-agent and false-positive-happy: they flag 
 TEST_TOKEN in a test fixture, block the install, and teach users to ignore warnings.
 `skill-vet` is built around two ideas:
 
-1. **FP calibration as a feature.** Placeholder/test credentials (`TEST_TOKEN`, `FAKE_KEY`,
-   `sk-...`, `your-api-key`) are allowlisted by default, and you can add project-specific
-   patterns in `.skillvet.yml`. A warning you can trust beats ten you ignore.
+1. **Explicit trust for suppressions.** Benign placeholder assignments do not match attack
+   rules. Placeholder words never exempt an entire line. Only a reviewer-selected
+   `--allowlist FILE` can suppress findings; package configuration is not trusted.
 2. **Agent-agnostic.** Scans anything the agent loads as text: `SKILL.md` bundles, Hermes
    skills, Cursor rules, MCP tool bundles, plugin directories.
 
@@ -45,8 +45,8 @@ TEST_TOKEN in a test fixture, block the install, and teach users to ignore warni
 | Dependencies | none (stdlib) | often heavy |
 | CI gate | exit codes + `--fail-on` severity | rarely |
 | SARIF for code scanning | ✅ | rarely |
-| Per-project allowlist | ✅ `.skillvet.yml` | rarely |
-| FP test-fixture policy | ✅ built-in | ✗ (flags test tokens) |
+| Per-project allowlist | ✅ explicit `--allowlist FILE` | rarely |
+| FP test-fixture policy | ✅ benign assignments, no blanket bypass | ✗ (flags test tokens) |
 
 ## Install
 
@@ -99,7 +99,7 @@ python3 skillvet.py ./skill/ --sarif out.sarif    # SARIF 2.1.0 for code scannin
 python3 skillvet.py ./skill/ --fail-on critical   # only critical findings fail CI (default: high)
 ```
 
-Exit codes: `0` = clean (or findings below threshold), `1` = findings at/above `--fail-on`.
+Exit codes: `0` = no findings at/above threshold (not proof of safety), `1` = findings at/above `--fail-on`.
 
 ## What it detects
 
@@ -114,33 +114,54 @@ Exit codes: `0` = clean (or findings below threshold), `1` = findings at/above `
 | `DESTRUCTIVE` | high | `rm -rf /`, `rm -rf ~`, `rm -rf $HOME` |
 | `EVAL-OBFUSCATION` | high | base64-decoded payload piped to shell |
 | `INJECT-IGNORE-PREVIOUS` | high | "ignore all previous instructions" |
-| `INJECT-EXFIL-REQUEST` | high | "send the api key to https://..." |
+| `INJECT-EXFIL-REQUEST` | high | EN/UA action + secrets/documents + remote destination |
+| `INJECT-MEMORY-WRITE` | high | requests to write agent memory/instructions/configuration |
+| `INJECT-SAFETY-DISABLE` | high | requests to disable safety/security checks |
 | `KEYCHAIN-ACCESS` | high | macOS keychain / secret-tool / cmdkey |
 | `CLIPBOARD-EXFIL` | high | pipes clipboard (`pbpaste`, `xclip -o`…) to the network |
 | `PERSIST-HOOK` | high | appends to shell startup files / cron |
 | `INJECT-HIDDEN` | medium | instructions hidden in HTML comments |
-| `UNICODE-STEGO` | medium | BiDi control characters |
+| `UNICODE-STEGO` | medium | targeted zero-width, BiDi and Unicode tag characters |
 | `INSTALL-PIPE-SHELL` | warn | `curl ... \| sh` |
 | `TELEMETRY-PHONES-HOME` | warn | self-reported telemetry |
 | `OSA-AUTOMATION` | warn | macOS `osascript -e` automation |
 
-Static analysis has known limits — this is a tripwire, not a sandbox. Deliberate
-simplification: line-level regex matching; full AST/dataflow analysis is the upgrade path.
+Static analysis is heuristic: a tripwire, **not a sandbox or a safety verdict**.
+Runtime permissions, network restrictions and human review remain separate controls.
+Code signatures stay line-local. Prose uses bounded windows (at most 3 lines / 512
+characters) and English/Ukrainian keyword heuristics, not arbitrary semantic or
+multilingual understanding. Straightforward negations are recognized, but quoted
+malicious examples and tutorials can still be flagged; there is no semantic certainty.
 
-## False positives: the `.skillvet.yml` allowlist
+Both raw and NFKC-normalized text are scanned. The normalized view decodes ASCII
+Unicode tags and removes selected zero-width/BiDi controls (not every Unicode `Cf`
+character, which would damage legitimate languages). Findings retain original line
+numbers/snippets and are deduplicated per rule/line. Obfuscations outside these
+transforms and instructions outside the bounded windows can be missed. Full
+AST/dataflow analysis is not implemented.
 
-Skills legitimately contain example tokens, test fixtures and install snippets. Default
-allowlist covers placeholder credentials (`TEST_TOKEN`, `FAKE_KEY`, `sk-...`,
-`your-api-key`). Add your own:
+## False positives: explicit trusted allowlists
 
-```yaml
-# .skillvet.yml in the skill root
-- allow: fixtures/.*token  # plain regexes matched per line
-- ci_stub_key_[0-9]+
+No allowlist is loaded by default. `.skillvet.yml` / `.skillvet.yaml` inside a scanned
+package or any ancestor are **not automatically trusted**. There is no built-in
+placeholder exemption: appending `EXAMPLE_KEY` cannot hide a malicious command.
+Benign assignments such as `FAKE_KEY=sk-...` naturally do not match attack rules.
+
+A reviewer can explicitly choose a trusted file, parsed once for all targets:
+
+```bash
+python3 skillvet.py ./skill/ --allowlist /trusted/reviewer/skillvet.yml
 ```
 
-This exists because a real-world skill (superpowers) was blocked by scanners flagging its
-own documentation tokens. Scanners that cry wolf get ignored; allowlists fix that.
+```yaml
+# /trusted/reviewer/skillvet.yml — one regex per '- ' line, not full YAML
+- ^ci_stub_key_[0-9]+$
+```
+
+Each regex suppresses the entire matching original line in both scan views. Keep
+patterns narrow and review them independently of the package; `- .*` disables all
+line checks. Invalid regexes warn and are ignored. The Python API also accepts
+explicit compiled regexes via `scan(root, allow=[re.compile(...)])`.
 
 ## CI: GitHub Action
 
@@ -171,7 +192,7 @@ signature-based scanner. Scan skills, not the scanner.
 ## Roadmap
 
 - [x] `--format github` annotations
-- [x] test suite covering every rule (21 tests, stdlib `unittest`)
+- [x] test suite covering every rule (stdlib `unittest`)
 - [x] pre-commit hook (`repos: ruslanlap/skill-vet, id: skill-vet`)
 - [x] pipx installable (`pipx install git+…/skill-vet`, `skillvet` command)
 - [ ] MCP tool-bundle aware parsing

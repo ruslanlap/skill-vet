@@ -7,10 +7,15 @@ harvesting, and unsafe install scripts. Zero dependencies, stdlib only.
 
 Exit codes: 0 = pass, 1 = findings at or above --fail-on severity.
 """
-import argparse, json, os, re, sys
+import argparse, json, os, re, sys, unicodedata
 from pathlib import Path
 
 SEV_ORDER = {"info": 0, "warn": 1, "medium": 2, "high": 3, "critical": 4}
+
+SECRET = r"(?:api[_\s]?keys?|tokens?|secrets?|credentials?|passwords?|documents?|private\s+keys?|cookies?|\.env|парол\w*|документ\w*|приватн\w*\s+ключ\w*|кукі)"
+SEND = r"(?:send|post|upload|forward|exfiltrate|надішли|надсилай|відправ\w*|завантаж\w*)"
+DEST = r"(?:https?://|discord|webhook|telegram|телеграм)"
+INVISIBLES = r"[\u200b\u2060\ufeff\u202a-\u202e\u2066-\u2069\U000e0001\U000e0020-\U000e007f]"
 
 # (id, severity, pattern, message)
 RULES = [
@@ -49,14 +54,23 @@ RULES = [
      r"(?i)(ignore|disregard|forget)\s+(all\s+)?(previous|prior|above)\s+(instructions|prompts|rules)",
      "Prompt injection: instructs the agent to ignore its instructions."),
     ("INJECT-EXFIL-REQUEST", "high",
-     r"(?i)(send|post|upload|forward)\s+(the\s+)?(api[_\s]?key|token|secret|credentials|\.env)[^\n]{0,40}(to|via|at)\s+(https?://|discord|webhook|telegram)",
+     rf"(?i)(?:\b{SEND}\b[\s\S]{{0,160}}?{SECRET}[\s\S]{{0,160}}?{DEST}|"
+     rf"{SECRET}[\s\S]{{0,120}}?\b{SEND}\b[\s\S]{{0,120}}?{DEST})",
      "Prompt injection: asks the agent to send secrets to a remote endpoint."),
+    ("INJECT-MEMORY-WRITE", "high",
+     r"(?i)\b(write|append|update|overwrite|modify|edit|запиши|додай|зміни)\b[\s\S]{0,120}?"
+     r"(?:MEMORY\.md|AGENTS\.md|SOUL\.md|USER\.md|CLAUDE\.md|(?:[\w./~-]*config)\.(?:yaml|yml|json|toml))\b",
+     "Prompt injection: asks to write agent memory, instructions or configuration."),
+    ("INJECT-SAFETY-DISABLE", "high",
+     r"(?i)\b(disable|bypass|turn\s+off|вимкни|обійди)\b[\s\S]{0,60}?"
+     r"(?:safety\s+(?:checks?|filters?|rules?|guards?)|security\s+(?:checks?|filters?)|safeguards?|перевір\w*\s+безпеки)",
+     "Prompt injection: asks to disable safety or security checks."),
     ("INJECT-HIDDEN", "medium",
-     r"<!--[\s\S]{0,200}?(?i:ignore|exfiltrate|curl|http)[\s\S]{0,200}?-->",
+     r"<!--[\s\S]{0,400}?(?i:ignore|exfiltrate|curl|http)[\s\S]{0,100}?(?:-->|$)",
      "Hidden instruction inside HTML comment (invisible to humans, read by agents)."),
     ("UNICODE-STEGO", "medium",
-     r"[\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069]",
-     "BiDi unicode control chars — can hide or reorder instructions visually."),
+     INVISIBLES,
+     "Invisible Unicode / BiDi / tag characters can conceal instructions."),
     ("INSTALL-PIPE-SHELL", "warn",
      r"curl[^\n]*\|\s*(sudo\s+)?(sh|bash|zsh)\b",
      "curl | sh install pattern — reviews impossible, verify the source."),
@@ -77,11 +91,6 @@ RULES = [
      "macOS osascript automation — can drive GUI, dialogs and network without prompts."),
 ]
 
-DEFAULT_ALLOWLIST = [
-    # CI/test fixtures legitimately contain fake tokens; do not flag
-    (r"TEST[-_]?TOKEN|FAKE[-_]?KEY|DUMMY|EXAMPLE[_-]?KEY|your[-_]?api[-_]?key|ghp_[A-Za-z0-9]{4}\.\.\.|sk-\.\.\.", "placeholder/test credential reference"),
-]
-
 SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv"}
 LEVEL_MAP = {"info": "note", "warn": "warning", "medium": "warning",
              "high": "error", "critical": "error"}
@@ -94,7 +103,7 @@ def parse_allowlist_file(cfg: Path):
     allow = []
     for line in cfg.read_text(encoding="utf-8", errors="ignore").splitlines():
         s = line.strip()
-        if s.startswith("- ") and ":" not in s:
+        if s.startswith("- "):
             pat = s[2:].strip().strip('"\'')
             if pat:
                 try:
@@ -104,18 +113,21 @@ def parse_allowlist_file(cfg: Path):
     return allow
 
 
-def find_allowlist(p: Path):
-    """Defaults merged with the nearest .skillvet.yml up the tree from p."""
-    allow = [re.compile(p_) for p_, _ in DEFAULT_ALLOWLIST]
-    d = p if p.is_dir() else p.parent
-    while True:
-        for name in (".skillvet.yml", ".skillvet.yaml"):
-            cfg = d / name
-            if cfg.exists():
-                return allow + parse_allowlist_file(cfg)
-        if d.parent == d:
-            return allow
-        d = d.parent
+def normalized_line(line):
+    line = "".join(chr(ord(c) - 0xE0000) if 0xE0020 <= ord(c) <= 0xE007E else c
+                   for c in line)
+    return unicodedata.normalize("NFKC", re.sub(INVISIBLES, "", line))
+
+
+def positive_matches(pattern, text):
+    # ponytail: bounded EN/UA clause heuristics, not semantics; use a parser if coverage demands it.
+    for clause in re.finditer(r"[^;!?]+", text):
+        body = clause.group()
+        for match in re.finditer(pattern, body):
+            prefix = body[:match.start()]
+            if re.search(r"(?i)\b(?:never|do\s+not|don't|must\s+not|should\s+not|ніколи\s+не|не)\s+$", prefix):
+                continue
+            yield clause.start() + match.start()
 
 
 def iter_files(root: Path):
@@ -128,8 +140,8 @@ def iter_files(root: Path):
 
 
 def scan(root: Path, allow=None):
-    if allow is None:
-        allow = find_allowlist(root)
+    # Suppression is a caller-owned trust decision, never package-controlled discovery.
+    allow = [] if allow is None else allow
     findings = []
     files = iter_files(root) if root.is_dir() else [p for p in [root] if p.suffix.lower() in TEXT_SUFFIXES or p.name.upper() == "SKILL.MD"]
     for f in files:
@@ -138,18 +150,29 @@ def scan(root: Path, allow=None):
         except OSError:
             continue
         rel = f.relative_to(root) if root.is_dir() else f.name
-        for lineno, line in enumerate(text.splitlines(), 1):
-            for allow_re in allow:
-                if allow_re.search(line):
-                    break
-            else:
+        lines = text.splitlines()
+        suppressed = [any(p.search(line) for p in allow) for line in lines]
+        seen = set()
+        for view in (lines, [normalized_line(line) for line in lines]):
+            for i, line in enumerate(view):
+                if suppressed[i]:
+                    continue
+                # ponytail: prose gets only 3 lines / 512 chars; code signatures stay line-local.
+                window = "\n".join("" if suppressed[j] else view[j]
+                                   for j in range(i, min(i + 3, len(view))))[:512]
                 for rid, sev, pat, msg in RULES:
-                    if re.search(pat, line):
+                    prose = rid.startswith("INJECT-")
+                    candidate = window if prose else line
+                    matches = positive_matches(pat, candidate) if prose and rid != "INJECT-HIDDEN" else (
+                        m.start() for m in re.finditer(pat, candidate))
+                    for start in matches:
+                        if start > len(line) or (rid, i) in seen:
+                            continue
+                        seen.add((rid, i))
                         findings.append({
                             "rule": rid, "severity": sev,
-                            "file": str(rel), "line": lineno,
-                            "message": msg,
-                            "snippet": line.strip()[:200],
+                            "file": str(rel), "line": i + 1,
+                            "message": msg, "snippet": lines[i].strip()[:200],
                         })
     return findings
 
@@ -184,7 +207,13 @@ def main():
                     help="github = ::error workflow annotations (default: auto with CI env)")
     ap.add_argument("--fail-on", choices=list(SEV_ORDER), default="high",
                     help="minimum severity to fail CI (default: high)")
+    ap.add_argument("--allowlist", metavar="FILE",
+                    help="explicit trusted regex allowlist (never auto-discovered)")
     args = ap.parse_args()
+    try:
+        allow = parse_allowlist_file(Path(args.allowlist)) if args.allowlist else []
+    except OSError as e:
+        ap.error(f"cannot read allowlist: {e}")
 
     targets = []
     for p in args.path:
@@ -194,7 +223,7 @@ def main():
         targets.append(rp)
     findings = []
     for t in targets:
-        findings.extend(scan(t))
+        findings.extend(scan(t, allow=allow))
 
     fmt = args.format or ("github" if os.getenv("GITHUB_ACTIONS") == "true" else "text")
     if args.sarif:

@@ -22,9 +22,10 @@ python3 test_skillvet.py   # must print ALL PASS
 
 ## Adding an allowlist entry
 
-Default allowlist entries in `DEFAULT_ALLOWLIST` must match *placeholder* credentials only
-(`TEST_TOKEN`, `sk-...`, `your-api-key`). Never allowlist broad patterns like `token` —
-that defeats the scanner.
+There is no default allowlist or package/ancestor configuration discovery. A reviewer
+must explicitly select a trusted file with `--allowlist FILE` (one regex per `- ` line).
+Patterns suppress entire original lines in both raw and normalized views. Keep them
+narrow: placeholder words must never create an automatic whole-line bypass.
 
 ## PR checklist
 

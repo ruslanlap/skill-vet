@@ -29,9 +29,8 @@ python3 skillvet.py ./some-skill/
 现有的 SKILL.md 扫描器往往只面向单一智能体，而且误报频出：它们会把测试夹具中的
 TEST_TOKEN 标记出来、阻断安装，并让用户学会无视警告。`skill-vet` 建立在两个理念之上：
 
-1. **把误报校准当作核心特性。** 占位/测试凭证（`TEST_TOKEN`、`FAKE_KEY`、
-   `sk-...`、`your-api-key`）默认就在白名单中，你还可以在 `.skillvet.yml` 中添加
-   项目专属的模式。一条值得信赖的警告，胜过十条被你忽略的警告。
+1. **显式信任。** 普通占位值赋值不会匹配攻击规则；占位词不会豁免整行。
+   只有审核者显式选择的 `--allowlist FILE` 才能抑制发现，不能信任被扫描包的配置。
 2. **与智能体无关。** 扫描智能体作为文本加载的任何内容：`SKILL.md` 技能包、Hermes
    skills、Cursor rules、MCP 工具包、插件目录。
 
@@ -40,8 +39,8 @@ TEST_TOKEN 标记出来、阻断安装，并让用户学会无视警告。`skill
 | 依赖 | 无（仅标准库） | 通常很重 |
 | CI 门禁 | 退出码 + `--fail-on` 严重级别 | 很少支持 |
 | 供 code scanning 使用的 SARIF | ✅ | 很少支持 |
-| 按项目配置白名单 | ✅ `.skillvet.yml` | 很少支持 |
-| 针对测试夹具的误报策略 | ✅ 内置 | ✗（会标记测试令牌） |
+| 按项目配置白名单 | ✅ `--allowlist FILE` | 很少支持 |
+| 针对测试夹具的误报策略 | ✅ 无整行占位词豁免 | ✗（会标记测试令牌） |
 
 ## 安装
 
@@ -80,7 +79,7 @@ python3 skillvet.py ./skill/ --sarif out.sarif    # SARIF 2.1.0 for code scannin
 python3 skillvet.py ./skill/ --fail-on critical   # only critical findings fail CI (default: high)
 ```
 
-退出码：`0` = 干净（或存在低于阈值的发现），`1` = 存在达到或超过 `--fail-on` 的发现。
+退出码：`0` = 没有达到阈值的发现（不是安全证明），`1` = 存在达到或超过 `--fail-on` 的发现。
 
 ## 检测内容
 
@@ -96,31 +95,43 @@ python3 skillvet.py ./skill/ --fail-on critical   # only critical findings fail 
 | `EVAL-OBFUSCATION` | high | base64 解码后的载荷通过管道传给 shell |
 | `INJECT-IGNORE-PREVIOUS` | high | “忽略之前所有指令” |
 | `INJECT-EXFIL-REQUEST` | high | “把 api key 发送到 https://...” |
+| `INJECT-MEMORY-WRITE` | high | memory / instructions / config write requests |
+| `INJECT-SAFETY-DISABLE` | high | safety/security disabling requests |
 | `KEYCHAIN-ACCESS` | high | macOS 钥匙串 / secret-tool / cmdkey |
 | `CLIPBOARD-EXFIL` | high | 将剪贴板内容（`pbpaste`、`xclip -o`…）通过管道传到网络 |
 | `PERSIST-HOOK` | high | 向 shell 启动文件 / cron 追加内容 |
 | `INJECT-HIDDEN` | medium | 隐藏在 HTML 注释中的指令 |
-| `UNICODE-STEGO` | medium | BiDi 控制字符 |
+| `UNICODE-STEGO` | medium | zero-width / BiDi / Unicode tags |
 | `INSTALL-PIPE-SHELL` | warn | `curl ... \| sh` |
 | `TELEMETRY-PHONES-HOME` | warn | 自述会上报数据的遥测行为 |
 | `OSA-AUTOMATION` | warn | macOS `osascript -e` 自动化 |
 
-静态分析存在已知的局限——这是一条绊线，而不是沙箱。刻意的简化：逐行正则匹配；
-完整的 AST/数据流分析是后续的升级方向。
+静态分析是启发式检测，不是沙箱，也不是安全证明。运行时权限、网络限制和人工审核
+仍是独立的控制措施。代码签名逐行检查；文本指令最多检查 3 行 / 512 字符。
+仅有英语和乌克兰语关键词启发式规则，不具备任意语义或多语言理解能力。
+简单的否定指令可以识别，但引用的恶意示例和教程仍可能触发规则。
+同时扫描原文和 NFKC 规范化文本：解码 ASCII Unicode 标签，移除选定的零宽/BiDi
+字符，而非所有 `Cf` 字符。保留原始行号与片段，按规则/行去重。
+其他混淆方式和超出窗口的指令可能漏报；未实现完整 AST/数据流分析。
 
-## 误报：`.skillvet.yml` 白名单
+## 误报：显式可信白名单
 
-技能中合理地包含示例令牌、测试夹具和安装代码片段。默认白名单已覆盖占位凭证
-（`TEST_TOKEN`、`FAKE_KEY`、`sk-...`、`your-api-key`）。添加你自己的规则：
+默认不加载白名单。被扫描包或其父目录中的 `.skillvet.yml` / `.skillvet.yaml`
+不会自动生效。追加 `EXAMPLE_KEY` 无法隐藏攻击；普通 `FAKE_KEY=sk-...` 赋值
+本来就不匹配攻击规则。
 
-```yaml
-# .skillvet.yml in the skill root
-- allow: fixtures/.*token  # plain regexes matched per line
-- ci_stub_key_[0-9]+
+```bash
+python3 skillvet.py ./skill/ --allowlist /trusted/reviewer/skillvet.yml
 ```
 
-这个功能源于一个真实案例：一个真实存在的技能（superpowers）被扫描器因它自己文档中的
-令牌而阻断。狼来了喊多了的扫描器会被无视；白名单解决了这个问题。
+```yaml
+# 每个 '- ' 行一个正则表达式，并非完整 YAML
+- ^ci_stub_key_[0-9]+$
+```
+
+审核者显式选择文件，所有扫描目标共用一次解析结果。每个正则会豁免匹配的整个原始行，
+同时影响两种扫描视图。请独立审核并收窄模式：`- .*` 会关闭所有行检查。
+无效正则会警告并忽略。Python API：`scan(root, allow=[re.compile(...)])`。
 
 ## CI：GitHub Action
 
@@ -151,7 +162,7 @@ python3 skillvet.py ./skill/ --fail-on critical   # only critical findings fail 
 ## 路线图
 
 - [x] `--format github` 注解输出
-- [x] 覆盖每条规则的测试套件（21 个测试，标准库 `unittest`）
+- [x] 覆盖每条规则的测试套件（标准库 `unittest`）
 - [x] pre-commit 钩子（`repos: ruslanlap/skill-vet, id: skill-vet`）
 - [x] 可通过 pipx 安装（`pipx install git+…/skill-vet`，`skillvet` 命令）
 - [ ] 支持 MCP 工具包感知的解析

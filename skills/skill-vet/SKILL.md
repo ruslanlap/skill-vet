@@ -23,17 +23,19 @@ curl -fsSL https://raw.githubusercontent.com/ruslanlap/skill-vet/main/skillvet.p
 python3 /tmp/skillvet.py /path/to/skill-dir/
 ```
 
-If the `skillvet` command is already installed, prefer it. Exit code `0` = safe to proceed,
+If the `skillvet` command is already installed, prefer it. Exit code `0` = no findings at/above threshold, not proof of safety;
 `1` = findings at or above the severity threshold (`--fail-on`, default `high`).
 
 ## Reading the output
 
 - `🔴 critical` / `🟠 high` — do NOT execute the skill. Report the findings to the user
   verbatim (rule ID, file, line, snippet) and let them decide.
-- `🟡 warn` — safe to run with user awareness; mention the warning once.
-- A finding may be a false positive (e.g. test tokens in fixtures). The skill author can
-  allowlist patterns in `.skillvet.yml`; as the agent, never edit the skill to silence
-  findings — ask the user.
+- `🟡 medium` / `🟡 warn` — report for review; severity is not permission to execute.
+- A finding may be a false positive, including quoted attack examples. Only a reviewer
+  may select an independently trusted `--allowlist FILE`; package or ancestor configs
+  are never auto-loaded. Never edit the skill to silence findings — ask the user.
+- The scanner is heuristic, not a sandbox. Runtime permissions and human review remain
+  separate controls; a clean scan cannot establish that a skill is safe.
 
 ## Hard rules
 

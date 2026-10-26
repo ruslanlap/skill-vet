@@ -30,10 +30,9 @@ python3 skillvet.py ./some-skill/
 спрацювань: вони позначають TEST_TOKEN у тестовій фікстурі, блокують встановлення
 і привчають користувачів ігнорувати попередження. `skill-vet` побудований на двох ідеях:
 
-1. **Калібрування FP як фіча.** Заглушки/тестові креденшели (`TEST_TOKEN`, `FAKE_KEY`,
-   `sk-...`, `your-api-key`) за замовчуванням у allowlist, а власні патерни проєкту можна
-   додати в `.skillvet.yml`. Одне попередження, якому можна довіряти, краще за десять,
-   які ви ігноруєте.
+1. **Явна довіра.** Звичайні присвоєння тестових значень не відповідають правилам атак.
+   Слова-заглушки не вимикають перевірку рядка. Винятки діють лише через
+   явно обраний рецензентом `--allowlist FILE`; конфігурація пакета не є довіреною.
 2. **Не прив'язаний до агента.** Сканує все, що агент завантажує як текст: бандли
    `SKILL.md`, скіли Hermes, правила Cursor, бандли MCP-інструментів, теки плагінів.
 
@@ -42,8 +41,8 @@ python3 skillvet.py ./some-skill/
 | Залежності | немає (stdlib) | часто важкі |
 | CI-гейт | коди виходу + `--fail-on` severity | рідко |
 | SARIF для code scanning | ✅ | рідко |
-| Allowlist на проєкт | ✅ `.skillvet.yml` | рідко |
-| FP-політика для тестових фікстур | ✅ вбудована | ✗ (позначає тестові токени) |
+| Allowlist на проєкт | ✅ `--allowlist FILE` | рідко |
+| FP-політика для тестових фікстур | ✅ без загального обходу | ✗ (позначає тестові токени) |
 
 ## Встановлення
 
@@ -82,7 +81,7 @@ python3 skillvet.py ./skill/ --sarif out.sarif    # SARIF 2.1.0 for code scannin
 python3 skillvet.py ./skill/ --fail-on critical   # only critical findings fail CI (default: high)
 ```
 
-Коди виходу: `0` — чисто (або знахідки нижче порогу), `1` — знахідки на рівні `--fail-on` або вище.
+Коди виходу: `0` — немає знахідок на рівні порогу або вище (не доказ безпеки), `1` — знахідки на рівні `--fail-on` або вище.
 
 ## Що він виявляє
 
@@ -98,34 +97,46 @@ python3 skillvet.py ./skill/ --fail-on critical   # only critical findings fail 
 | `EVAL-OBFUSCATION` | high | payload, декодований з base64, переданий у shell |
 | `INJECT-IGNORE-PREVIOUS` | high | "ignore all previous instructions" |
 | `INJECT-EXFIL-REQUEST` | high | "send the api key to https://..." |
+| `INJECT-MEMORY-WRITE` | high | memory / instructions / config write requests |
+| `INJECT-SAFETY-DISABLE` | high | safety/security disabling requests |
 | `KEYCHAIN-ACCESS` | high | macOS keychain / secret-tool / cmdkey |
 | `CLIPBOARD-EXFIL` | high | передає буфер обміну (`pbpaste`, `xclip -o`…) у мережу |
 | `PERSIST-HOOK` | high | дописує у shell-файли автозапуску / cron |
 | `INJECT-HIDDEN` | medium | інструкції, сховані в HTML-коментарях |
-| `UNICODE-STEGO` | medium | керуючі символи BiDi |
+| `UNICODE-STEGO` | medium | zero-width / BiDi / Unicode tags |
 | `INSTALL-PIPE-SHELL` | warn | `curl ... \| sh` |
 | `TELEMETRY-PHONES-HOME` | warn | телеметрія, що сама звітує назовні |
 | `OSA-AUTOMATION` | warn | автоматизація macOS `osascript -e` |
 
-У статичного аналізу є відомі обмеження — це механізм раннього сповіщення, а не пісочниця. Свідоме
-спрощення: regex-матчинг на рівні рядків; повний AST/аналіз потоку даних — шлях
-модернізації.
+Статичний аналіз — евристика, а не пісочниця чи доказ безпеки. Дозволи виконання,
+мережеві обмеження та ручний перегляд потрібні окремо. Сигнатури коду перевіряються
+порядково; проза — у вікні до 3 рядків / 512 символів. Ключові слова англійською й
+українською не забезпечують довільного семантичного чи багатомовного аналізу.
+Прості заперечення враховуються, але цитовані атаки й навчальні приклади можуть
+спрацьовувати. Перевіряються оригінал і NFKC-нормалізований текст: ASCII Unicode-теги
+декодуються, вибрані zero-width/BiDi-символи видаляються (не всі символи `Cf`).
+Номери рядків і фрагменти залишаються оригінальними; дублікати правило/рядок усуваються.
+Інші обфускації й довші інструкції можуть залишитися непоміченими.
 
-## Хибні спрацювання: allowlist у `.skillvet.yml`
+## Хибні спрацювання: явний довірений allowlist
 
-Скіли цілком закономірно містять приклади токенів, тестові фікстури та сніпети
-встановлення. Стандартний allowlist покриває заглушки креденшелів (`TEST_TOKEN`,
-`FAKE_KEY`, `sk-...`, `your-api-key`). Додайте свої:
+За замовчуванням винятків немає. `.skillvet.yml` / `.skillvet.yaml` у пакеті та
+батьківських теках автоматично не завантажуються. `EXAMPLE_KEY` не приховує атаку;
+звичайне `FAKE_KEY=sk-...` саме по собі не відповідає правилам атак.
 
-```yaml
-# .skillvet.yml in the skill root
-- allow: fixtures/.*token  # plain regexes matched per line
-- ci_stub_key_[0-9]+
+```bash
+python3 skillvet.py ./skill/ --allowlist /trusted/reviewer/skillvet.yml
 ```
 
-Це з'явилося тому, що реальний скіл (superpowers) був заблокований сканерами, які
-позначали токени з його власної документації. Сканери, що кричать «вовк», ігнорують;
-allowlist це виправляє.
+```yaml
+# Один regex на рядок '- ', не повний YAML
+- ^ci_stub_key_[0-9]+$
+```
+
+Файл обирає рецензент; його читають один раз для всіх цілей. Regex вимикає перевірку
+всього відповідного оригінального рядка в обох поданнях. Звужуйте шаблони:
+`- .*` вимикає всі перевірки рядків. Помилкові regex ігноруються з попередженням.
+Python API: `scan(root, allow=[re.compile(...)])`.
 
 ## CI: GitHub Action
 
@@ -156,7 +167,7 @@ allowlist це виправляє.
 ## Roadmap
 
 - [x] `--format github` анотації
-- [x] тест-сьют, що покриває кожне правило (21 тест, stdlib `unittest`)
+- [x] тест-сьют, що покриває кожне правило (stdlib `unittest`)
 - [x] pre-commit хук (`repos: ruslanlap/skill-vet, id: skill-vet`)
 - [x] встановлення через pipx (`pipx install git+…/skill-vet`, команда `skillvet`)
 - [ ] парсинг із підтримкою MCP tool-бандлів
