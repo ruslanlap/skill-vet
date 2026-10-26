@@ -3,7 +3,7 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "skillvet"
+name = "ruslanlap-skill-vet"
 version = "0.2.2"
 description = "Vet AI agent skills before your agent runs them"
 readme = "README.md"
