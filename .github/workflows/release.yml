@@ -73,3 +73,9 @@ jobs:
               --notes "Automated patch release after successful main-branch CI. Includes the standalone scanner, Python wheel and source distribution."
           fi
           gh release view "$TAG" --json tagName,url,assets,isDraft,isPrerelease
+      - name: Publish the same distributions to PyPI
+        if: steps.prepare.outputs.tag != ''
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          skip-existing: true

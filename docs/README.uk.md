@@ -58,7 +58,7 @@ python3 skill-vet/skillvet.py ./path/to/skill/
 Через pip/uv/pipx:
 
 ```bash
-pipx install git+https://github.com/ruslanlap/skill-vet
+pipx install skillvet
 skillvet ./path/to/skill/
 ```
 
@@ -181,8 +181,10 @@ PRи вітаються — дивіться [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Після успішного push CI на `main` автоматично виходить наступна patch-версія
 (наприклад, `v0.2.1`) з нотатками, `skillvet.py`, wheel і вихідним архівом.
-PR та невдалий CI не публікують релізів; публікації на PyPI немає.
-Потрібен лише `GITHUB_TOKEN` з `contents: write`; правила репозиторію мають
+PR та невдалий CI не публікують релізів. Ті самі wheel та архів публікуються на
+[PyPI як `skillvet`](https://pypi.org/project/skillvet/): `pip install skillvet`.
+Назва `skill-vet` на PyPI належить іншому проєкту. Для PyPI потрібен Actions secret
+`PYPI_API_TOKEN`; для GitHub — `GITHUB_TOKEN` з `contents: write`. Правила репозиторію мають
 дозволяти Actions надсилати коміти версій у `main` і створювати теги.
 Для повторної спроби публікації перезапустіть **Automatic release**.
 
