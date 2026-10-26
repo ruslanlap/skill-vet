@@ -200,6 +200,20 @@ signature-based scanner. Scan skills, not the scanner.
 PRs welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Security issues:
 [SECURITY.md](SECURITY.md).
 
+## Automatic releases
+
+Successful push CI on `main` automatically publishes the next patch version
+(`v0.2.0` → `v0.2.1`). PRs and failed CI cannot publish. The workflow tests and
+builds the release, then atomically pushes a version-only commit and matching tag
+before creating a GitHub Release with generated notes, `skillvet.py`, a wheel and
+a source distribution. It does not publish to PyPI.
+
+Only `GITHUB_TOKEN` with `contents: write` is needed; no PAT or release secret.
+Repository rules must allow GitHub Actions to push version commits to `main`
+and create version tags. A newer `main` supersedes stale CI runs. Release commits
+do not start another release. To retry a failed publish, rerun its **Automatic
+release** workflow; an already-pushed release is reused without another bump.
+
 ## License
 
 MIT

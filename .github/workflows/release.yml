@@ -1,0 +1,75 @@
+name: Automatic release
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: automatic-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Prepare version (or recover a previous publish)
+        id: prepare
+        env:
+          TESTED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          git fetch origin main --tags
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          python .github/scripts/prepare_release.py "$TESTED_SHA" >> "$GITHUB_OUTPUT"
+      - name: Test and build the exact release
+        if: steps.prepare.outputs.tag != ''
+        run: |
+          python -m unittest discover -v
+          python -m pip install build
+          python -m build
+      - name: Push commit and tag together
+        if: steps.prepare.outputs.push == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.prepare.outputs.tag }}
+        run: |
+          # Command-scoped auth: no token in the checkout, remote URL or git config.
+          AUTH=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $AUTH" \
+            push --atomic origin HEAD:refs/heads/main "refs/tags/$TAG"
+      - name: Publish assets and generated release notes
+        if: steps.prepare.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ steps.prepare.outputs.tag }}
+        run: |
+          # GITHUB_TOKEN pushes do not trigger another workflow; publish here.
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" skillvet.py dist/*.whl dist/*.tar.gz --clobber
+          else
+            gh release create "$TAG" skillvet.py dist/*.whl dist/*.tar.gz \
+              --verify-tag --title "$TAG" --generate-notes \
+              --notes "Automated patch release after successful main-branch CI. Includes the standalone scanner, Python wheel and source distribution."
+          fi
+          gh release view "$TAG" --json tagName,url,assets,isDraft,isPrerelease

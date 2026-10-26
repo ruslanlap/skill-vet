@@ -172,6 +172,14 @@ python3 skillvet.py ./skill/ --allowlist /trusted/reviewer/skillvet.yml
 
 本文为英文版翻译，英文版为权威版本。
 
+## 自动发布
+
+`main` 分支的 push CI 成功后，自动发布下一个补丁版本（例如 `v0.2.1`），
+包含发布说明、`skillvet.py`、wheel 和源码包。PR 和失败的 CI 不会发布，
+也不会上传至 PyPI。只需具有 `contents: write` 权限的 `GITHUB_TOKEN`；
+仓库规则必须允许 Actions 向 `main` 推送版本提交并创建版本标签。
+发布失败时，可重新运行 **Automatic release** 工作流。
+
 ## 许可证
 
 MIT
